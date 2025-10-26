@@ -1,5 +1,5 @@
 package th.ac.mfu.repoai.domain;
-#comment
+
 import jakarta.persistence.*;
 
 @Entity
