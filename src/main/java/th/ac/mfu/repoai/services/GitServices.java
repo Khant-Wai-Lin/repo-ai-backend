@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import th.ac.mfu.repoai.domain.Repository;
 import th.ac.mfu.repoai.domain.User;
+
+import th.ac.mfu.repoai.domain.branchdto.BranchSummary;
 import th.ac.mfu.repoai.repository.RepositoryRepository;
 import th.ac.mfu.repoai.repository.UserRepository;
 
@@ -45,13 +47,13 @@ public class GitServices {
      */
     public ResponseEntity<OAuth2AccessToken> loadGitHubToken(Authentication principal) {
         String clientRegistrationId = "github";
-    if (principal == null) {
-        // No authenticated principal in the context
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
-    }
+        if (principal == null) {
+            // No authenticated principal in the context
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
 
-    OAuth2AuthorizedClient client = authorizedClientService
-        .loadAuthorizedClient(clientRegistrationId, principal.getName());
+        OAuth2AuthorizedClient client = authorizedClientService
+                .loadAuthorizedClient(clientRegistrationId, principal.getName());
 
         if (client == null || client.getAccessToken() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -479,4 +481,45 @@ public class GitServices {
             }
         }
     }
+
+    public List<BranchSummary> listBranches(
+            Authentication auth,
+            String owner,
+            String repo,
+            Boolean protectedOnly,
+            int page,
+            int perPage) {
+
+        String url = String.format(
+                "https://api.github.com/repos/%s/%s/branches?page=%d&per_page=%d%s",
+                owner, repo, page, perPage,
+                protectedOnly == null ? "" : "&protected=" + protectedOnly);
+
+        var resp = callGitHubApi(url); // uses cached token/headers
+        if (!resp.getStatusCode().is2xxSuccessful()) {
+            // propagate GitHub’s status instead of 500
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.valueOf(resp.getStatusCode().value()),
+                    "GitHub list branches failed: " + resp.getBody());
+        }
+
+        try {
+            var mapper = new ObjectMapper()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+            // Option 1: TypeFactory (no overload ambiguity)
+            var listType = mapper.getTypeFactory()
+                    .constructCollectionType(java.util.List.class, BranchSummary.class);
+            return mapper.readValue(resp.getBody(), listType);
+
+            // Option 2: TypeReference (also fine if imports are correct)
+            // return mapper.readValue(resp.getBody(), new
+            // TypeReference<List<BranchSummary>>() {});
+        } catch (Exception e) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_GATEWAY,
+                    "Cannot parse GitHub branches JSON", e);
+        }
+    }
+
 }
