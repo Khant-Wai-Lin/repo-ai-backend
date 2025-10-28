@@ -12,6 +12,7 @@ import th.ac.mfu.repoai.domain.Repository;
 import th.ac.mfu.repoai.domain.User;
 
 import th.ac.mfu.repoai.domain.branchdto.BranchSummary;
+import th.ac.mfu.repoai.domain.repositorydto.RepositoryDto;
 import th.ac.mfu.repoai.repository.RepositoryRepository;
 import th.ac.mfu.repoai.repository.UserRepository;
 
@@ -397,7 +398,7 @@ public class GitServices {
     // GitHub Operations + Local Database Synchronize
     // ==============================================
 
-    public ResponseEntity<Repository> createUserRepositoryAndSave(
+    public ResponseEntity<RepositoryDto> createUserRepositoryAndSave(
             String name,
             String description,
             Boolean isPrivate,
@@ -410,17 +411,17 @@ public class GitServices {
         }
         Map<String, Object> repoJson = gh.getBody();
         Repository entity = upsertRepositoryFromGitHubJson(repoJson);
-        return ResponseEntity.status(HttpStatus.CREATED).body(entity);
+        return ResponseEntity.status(HttpStatus.CREATED).body(RepositoryDto.fromEntity(entity));
     }
 
-    public ResponseEntity<Repository> updateRepositoryAndSave(String owner, String repo, Map<String, Object> updates) {
+    public ResponseEntity<RepositoryDto> updateRepositoryAndSave(String owner, String repo, Map<String, Object> updates) {
         ResponseEntity<Map<String, Object>> gh = updateRepository(owner, repo, updates);
         if (!gh.getStatusCode().is2xxSuccessful() || gh.getBody() == null) {
             return ResponseEntity.status(gh.getStatusCode()).build();
         }
         Map<String, Object> repoJson = gh.getBody();
         Repository entity = upsertRepositoryFromGitHubJson(repoJson);
-        return ResponseEntity.ok(entity);
+        return ResponseEntity.ok(RepositoryDto.fromEntity(entity));
     }
 
     public ResponseEntity<Void> deleteRepositoryAndRemove(String owner, String repo) {

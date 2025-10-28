@@ -14,8 +14,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+
 import th.ac.mfu.repoai.domain.User;
 import th.ac.mfu.repoai.domain.Repository;
+import th.ac.mfu.repoai.domain.repositorydto.RepositoryDto;
 import th.ac.mfu.repoai.repository.RepositoryRepository;
 import th.ac.mfu.repoai.repository.UserRepository;
 import th.ac.mfu.repoai.services.GitServices;
@@ -36,12 +43,18 @@ public class RepositoryController {
     }
 
     // List repositories saved for a user (by user's GitHub ID)
+    @Operation(summary = "List repositories for a GitHub user (from DB)",
+            responses = {
+                @ApiResponse(responseCode = "200", description = "OK",
+                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = RepositoryDto.class))))
+            })
     @GetMapping("/")
-    public ResponseEntity<?> getRepos(@RequestParam long githubId) {
+    public ResponseEntity<List<RepositoryDto>> getRepos(@RequestParam long githubId) {
         User user = userRepository.findByGithubId(githubId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         List<Repository> repos = repositoryRepository.findByUser(user);
-        return ResponseEntity.ok(repos);
+        List<RepositoryDto> dto = repos.stream().map(RepositoryDto::fromEntity).toList();
+        return ResponseEntity.ok(dto);
     }
 
     // (Removed) DB-only create/update/delete endpoints have been replaced by GitHub-backed endpoints below.
@@ -50,8 +63,13 @@ public class RepositoryController {
     // GitHub-backed operations
     // =========================
 
+    @Operation(summary = "Create repo on GitHub and sync to DB",
+            responses = {
+                @ApiResponse(responseCode = "201", description = "Created",
+                    content = @Content(schema = @Schema(implementation = RepositoryDto.class)))
+            })
     @PostMapping("/")
-    public ResponseEntity<?> createRepos(@RequestBody Map<String, Object> payload) {
+    public ResponseEntity<RepositoryDto> createRepos(@RequestBody Map<String, Object> payload) {
         String name = (String) payload.get("name");
         String description = (String) payload.get("description");
         Boolean isPrivate = (Boolean) payload.get("private");
@@ -60,22 +78,31 @@ public class RepositoryController {
         return gitServices.createUserRepositoryAndSave(name, description, isPrivate, defaultBranch, autoInit);
     }
 
+    @Operation(summary = "Update repo on GitHub and sync to DB",
+            responses = {
+                @ApiResponse(responseCode = "200", description = "OK",
+                    content = @Content(schema = @Schema(implementation = RepositoryDto.class)))
+            })
     @PutMapping("/{owner}/{repo}")
-    public ResponseEntity<?> updateRepos(@PathVariable String owner,
+    public ResponseEntity<RepositoryDto> updateRepos(@PathVariable String owner,
             @PathVariable String repo,
             @RequestBody Map<String, Object> updates) {
         // Guard: GitHub expects repo NAME here, not numeric repo_id
         if (repo != null && repo.matches("\\d+")) {
-            return ResponseEntity.badRequest().body("Path parameter 'repo' must be the repository name, not the numeric id");
+            return ResponseEntity.badRequest().build();
         }
         return gitServices.updateRepositoryAndSave(owner, repo, updates);
     }
 
+    @Operation(summary = "Delete repo on GitHub and remove from DB",
+            responses = {
+                @ApiResponse(responseCode = "204", description = "No Content")
+            })
     @DeleteMapping("/{owner}/{repo}")
-    public ResponseEntity<?> deleteRepos(@PathVariable String owner, @PathVariable String repo) {
+    public ResponseEntity<Void> deleteRepos(@PathVariable String owner, @PathVariable String repo) {
         // Guard: GitHub expects repo NAME here, not numeric repo_id
         if (repo != null && repo.matches("\\d+")) {
-            return ResponseEntity.badRequest().body("Path parameter 'repo' must be the repository name, not the numeric id");
+            return ResponseEntity.badRequest().build();
         }
         return gitServices.deleteRepositoryAndRemove(owner, repo);
     }

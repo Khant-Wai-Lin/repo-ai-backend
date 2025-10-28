@@ -3,6 +3,15 @@ package th.ac.mfu.repoai.domain;
 import jakarta.persistence.*;
 
 @Entity
+@Table(
+    name = "repositories",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "uq_repository_full_name",
+            columnNames = {"full_name"}
+        )
+    }
+)
 public class Repository {
 
     @Id
