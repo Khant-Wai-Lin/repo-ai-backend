@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -24,6 +25,7 @@ public class ConversationController {
 
     private final ConversationService service;
     private final ConversationRepository convos;
+    @SuppressWarnings("unused")
     private final UserRepository users;
 
     public ConversationController(
@@ -44,10 +46,10 @@ public class ConversationController {
             @Valid @RequestBody CreateConversationRequest req) {
 
         Long githubId = resolveGithubId(auth, req.githubId());
-        var saved = service.create(
+        Conversation saved = service.create(
                 githubId,
                 req.repoId(),
-                req.branchId(), // may be null
+                req.branchId(),
                 req.title(),
                 req.goal(),
                 req.metadataJson());
@@ -69,8 +71,8 @@ public class ConversationController {
 
         List<Conversation> list;
         if (repoId != null && status != null) {
-            list = convos.findByUserGithubIdAndRepositoryRepoIdAndStatusOrderByUpdatedAtDesc(currentGithubId, repoId,
-                    status);
+            list = convos.findByUserGithubIdAndRepositoryRepoIdAndStatusOrderByUpdatedAtDesc(
+                    currentGithubId, repoId, status);
         } else if (repoId != null) {
             list = convos.findByUserGithubIdAndRepositoryRepoIdOrderByUpdatedAtDesc(currentGithubId, repoId);
         } else if (status != null) {
@@ -92,7 +94,7 @@ public class ConversationController {
             @RequestParam(required = false) Long githubId) {
 
         Long currentGithubId = resolveGithubId(auth, githubId);
-        var convo = convos.findById(id).orElse(null);
+        Conversation convo = convos.findById(id).orElse(null);
         if (convo == null || convo.getUser() == null ||
                 !currentGithubId.equals(convo.getUser().getGithubId())) {
             return ResponseEntity.notFound().build();
@@ -110,34 +112,62 @@ public class ConversationController {
             @RequestParam(required = false) Long githubId) {
 
         Long currentGithubId = resolveGithubId(auth, githubId);
-        var updated = service.archive(id, currentGithubId);
+        Conversation updated = service.archive(id, currentGithubId);
         return ResponseEntity.ok(ConversationDTO.from(updated));
     }
 
-    // === Helpers ===
+    // -------------------------
+    // PUT /api/conversations/{id}
+    // -------------------------
+    @PutMapping("/{id}")
+    public ResponseEntity<ConversationDTO> update(
+            Authentication auth,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateConversationRequest req) {
 
-    /**
-     * Determine the current user's GitHub id.
-     * Priority:
-     * 1) Explicit githubId (query/body)
-     * 2) Numeric principal name from OAuth (common with GitHub)
-     * 3) Otherwise, fail with a clear message
-     */
+        Long githubId = resolveGithubId(auth, req.githubId());
+
+        Conversation updated = service.update(
+                id,
+                githubId,
+                req.title(),
+                req.goal(),
+                req.branchId(), // may be null (keep current)
+                req.status(), // may be null (keep current)
+                req.metadataJson()); // may be null (keep current)
+
+        return ResponseEntity.ok(ConversationDTO.from(updated));
+    }
+
+    // ---------------------------
+    // DELETE /api/conversations/{id}
+    // ---------------------------
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(
+            Authentication auth,
+            @PathVariable Long id,
+            @RequestParam(required = false) Long githubId) {
+
+        Long currentGithubId = resolveGithubId(auth, githubId);
+        Conversation convo = convos.findById(id).orElse(null);
+        if (convo == null || convo.getUser() == null
+                || !Objects.equals(convo.getUser().getGithubId(), currentGithubId)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        service.delete(id, currentGithubId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ===== Helpers =====
     private Long resolveGithubId(Authentication auth, Long githubIdFromClient) {
         if (githubIdFromClient != null)
             return githubIdFromClient;
-
-        if (auth != null && auth.getName() != null) {
-            String name = auth.getName();
-            if (name.matches("\\d+")) {
-                users.findByGithubId(Long.parseLong(name))
-                        .orElseThrow(() -> new IllegalArgumentException(
-                                "No local user row for GitHub id " + name + ". Call /api/auth/login first."));
-                return Long.parseLong(name);
-            }
+        if (auth != null && auth.getName() != null && auth.getName().matches("\\d+")) {
+            return Long.parseLong(auth.getName());
         }
         throw new IllegalArgumentException(
-                "Cannot resolve githubId. Provide ?githubId=... or ensure OAuth principal name is the numeric GitHub id.");
+                "Cannot resolve githubId. Provide ?githubId=... or ensure OAuth login is active.");
     }
 
     // ===== DTOs =====
@@ -147,6 +177,16 @@ public class ConversationController {
             Long branchId,
             @NotBlank String title,
             @NotBlank String goal,
+            String metadataJson,
+            Long githubId // optional
+    ) {
+    }
+
+    public record UpdateConversationRequest(
+            String title,
+            String goal,
+            Long branchId,
+            ConversationStatus status,
             String metadataJson,
             Long githubId) {
     }
@@ -178,5 +218,4 @@ public class ConversationController {
                     c.getLastMessageAt());
         }
     }
-
 }
