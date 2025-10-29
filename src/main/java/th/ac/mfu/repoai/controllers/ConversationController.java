@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import io.swagger.v3.oas.annotations.Operation;
+
 import th.ac.mfu.repoai.domain.Conversation;
 import th.ac.mfu.repoai.domain.ConversationStatus;
 import th.ac.mfu.repoai.repository.ConversationRepository;
@@ -40,6 +42,7 @@ public class ConversationController {
     // -----------------------------------------
     // 1) Create a conversation
     // -----------------------------------------
+    @Operation(summary = "Create a conversation for a repo")
     @PostMapping
     public ResponseEntity<ConversationDTO> create(
             Authentication auth,
@@ -60,6 +63,7 @@ public class ConversationController {
     // -----------------------------------------
     // 2) List my conversations (optionally filter by repo or status)
     // -----------------------------------------
+    @Operation(summary = "List the conversations")
     @GetMapping
     public ResponseEntity<List<ConversationDTO>> listMine(
             Authentication auth,
@@ -87,6 +91,7 @@ public class ConversationController {
     // -----------------------------------------
     // 3) Get one conversation by id (owner-only)
     // -----------------------------------------
+    @Operation(summary = "get by conversation id from Db")
     @GetMapping("/{id}")
     public ResponseEntity<ConversationDTO> getOne(
             Authentication auth,
@@ -105,6 +110,7 @@ public class ConversationController {
     // -----------------------------------------
     // 4) Archive (soft-delete) a conversation
     // -----------------------------------------
+    @Operation(summary = "sets status=ARCHIVED; record is retained")
     @PostMapping("/{id}/archive")
     public ResponseEntity<ConversationDTO> archive(
             Authentication auth,
