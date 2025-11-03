@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import th.ac.mfu.repoai.domain.BranchPushRequest;
 import th.ac.mfu.repoai.domain.Repository;
 import th.ac.mfu.repoai.domain.User;
 
@@ -24,6 +25,7 @@ import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -414,7 +416,8 @@ public class GitServices {
         return ResponseEntity.status(HttpStatus.CREATED).body(RepositoryDto.fromEntity(entity));
     }
 
-    public ResponseEntity<RepositoryDto> updateRepositoryAndSave(String owner, String repo, Map<String, Object> updates) {
+    public ResponseEntity<RepositoryDto> updateRepositoryAndSave(String owner, String repo,
+            Map<String, Object> updates) {
         ResponseEntity<Map<String, Object>> gh = updateRepository(owner, repo, updates);
         if (!gh.getStatusCode().is2xxSuccessful() || gh.getBody() == null) {
             return ResponseEntity.status(gh.getStatusCode()).build();
@@ -521,6 +524,53 @@ public class GitServices {
                     org.springframework.http.HttpStatus.BAD_GATEWAY,
                     "Cannot parse GitHub branches JSON", e);
         }
+    }
+
+    public String getBranchSha(String owner, String repo, String baseBranch, String token) {
+
+        String url = String.format("https://api.github.com/repos/%s/%s/branches/%s", owner, repo, baseBranch);
+
+        RestTemplate rest = new RestTemplate();
+
+        HttpHeaders headers = new HttpHeaders();
+
+        headers.set("Authorization", "Bearer " + token);
+
+        HttpEntity<?> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<Map> response = rest.exchange(url, HttpMethod.GET, entity, Map.class);
+
+        Map commit = (Map) response.getBody().get("commit");
+
+        return (String) commit.get("sha");
+    }
+
+    public void createBranch(String owner, String repo, String newBranch, String sha, String token) {
+        String url = String.format("https://api.github.com/repos/%s/%s/git/refs", owner, repo);
+        RestTemplate rest = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, Object> body = new HashMap<>();
+        body.put("ref", "refs/heads/" + newBranch);
+        body.put("sha", sha);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+        rest.postForEntity(url, entity, String.class);
+    }
+
+    public void putFile(String owner, String repo, BranchPushRequest.FileChange file, String message, String branch,
+            String token) {
+        String url = String.format("https://api.github.com/repos/%s/%s/contents/%s", owner, repo, file.path);
+        RestTemplate rest = new RestTemplate();
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer " + token);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, Object> body = new HashMap<>();
+        body.put("message", message);
+        body.put("content", file.base64Content);
+        body.put("branch", branch);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+        rest.exchange(url, HttpMethod.PUT, entity, Map.class);
     }
 
 }

@@ -6,6 +6,7 @@ import org.springframework.web.server.ResponseStatusException;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import th.ac.mfu.repoai.domain.BranchEntity;
+import th.ac.mfu.repoai.domain.BranchPushRequest;
 import th.ac.mfu.repoai.domain.branchdto.BranchSummary;
 
 import th.ac.mfu.repoai.repository.BranchRepository;
@@ -108,4 +109,24 @@ public class BranchSyncService {
             return null;
         }
     }
+
+    public void createAndPushBranch(
+            String token, String owner, String repo,
+            String baseBranch, String newBranch,
+            List<BranchPushRequest.FileChange> files, String commitMessage) {
+        // 1. Get base branch SHA from GitHub
+        String sha = git.getBranchSha(owner, repo, baseBranch, token);
+
+        // 2. Create a new branch from base branch
+        git.createBranch(owner, repo, newBranch, sha, token);
+
+        // 3. Commit/push each file change
+        for (BranchPushRequest.FileChange file : files) {
+            git.putFile(owner, repo, file, commitMessage, newBranch, token);
+        }
+
+        // 4. Sync DB with GitHub state
+        syncBranches(null, owner, repo);
+    }
+
 }

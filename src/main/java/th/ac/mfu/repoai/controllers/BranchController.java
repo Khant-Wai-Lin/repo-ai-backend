@@ -1,9 +1,12 @@
 package th.ac.mfu.repoai.controllers;
 
 import io.swagger.v3.oas.annotations.Operation;
+
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import th.ac.mfu.repoai.domain.BranchEntity;
+import th.ac.mfu.repoai.domain.BranchPushRequest;
 import th.ac.mfu.repoai.repository.BranchRepository;
 import th.ac.mfu.repoai.repository.RepositoryRepository;
 import th.ac.mfu.repoai.services.BranchSyncService;
@@ -46,6 +49,19 @@ public class BranchController {
             @PathVariable String owner,
             @PathVariable String repo) {
         return syncService.syncBranches(auth, owner, repo);
+    }
+
+    @Operation(summary = "Create a new branch on GitHub and push refactored code")
+    @PostMapping("/github/{owner}/{repo}/branches/create-push")
+    public ResponseEntity<String> createAndPushBranch(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable String owner,
+            @PathVariable String repo,
+            @RequestBody BranchPushRequest req) {
+        String token = authHeader.replace("Bearer ", "").trim();
+        syncService.createAndPushBranch(token, req.owner, req.repo, req.baseBranch, req.newBranch, req.fileChanges,
+                req.commitMessage);
+        return ResponseEntity.ok("Branch created and code pushed.");
     }
 
 }
