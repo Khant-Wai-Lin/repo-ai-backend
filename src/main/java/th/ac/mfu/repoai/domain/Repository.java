@@ -1,5 +1,7 @@
 package th.ac.mfu.repoai.domain;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.*;
 
 @Entity
@@ -24,8 +26,11 @@ public class Repository {
     private String name;
     @Column(length = 1000)
     private String description;
-    private String defaultBranch;
+    private String defaultBranch;   
     private Long ownerGithubId;
+    
+    @Enumerated(EnumType.STRING)
+    private RepositoryProvider provider; // GITHUB (enum)
 
     // ✅ Link to user
     @ManyToOne(fetch = FetchType.LAZY)
@@ -37,7 +42,7 @@ public class Repository {
 
     public Repository(Long repoId, String owner, boolean isPrivate, String fullName,
             String htmlUrl, String name, String description,
-            String defaultBranch, Long ownerGithubId, User user) {
+            String defaultBranch, Long ownerGithubId, String primaryLanguage,  User user) {
         this.repoId = repoId;
         this.owner = owner;
         this.isPrivate = isPrivate;
@@ -130,4 +135,8 @@ public class Repository {
     public void setUser(User user) {
         this.user = user;
     }
+}
+
+enum RepositoryProvider {
+    GITHUB
 }

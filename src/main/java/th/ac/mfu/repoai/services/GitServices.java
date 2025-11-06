@@ -222,14 +222,17 @@ public class GitServices {
                     });
 
             List<Map<String, Object>> simplifiedRepos = new ArrayList<>();
-
+                    
             for (Map<String, Object> repo : repositories) {
                 Map<?, ?> owner = null;
                 Object ownerObj = repo.get("owner");
                 if (ownerObj instanceof Map<?, ?> m) {
                     owner = m;
                 }
-
+                System.out.println(repo.keySet().toString());
+                System.out.println(repo.get("language"));
+                System.out.println(repo.get("languages_url"));
+                System.out.println(repo.get("size"));
                 Long repoId = ((Number) repo.get("id")).longValue();
                 String repoName = (String) repo.get("name");
                 String fullName = (String) repo.get("full_name");

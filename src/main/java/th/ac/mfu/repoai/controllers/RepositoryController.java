@@ -1,8 +1,11 @@
 package th.ac.mfu.repoai.controllers;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,10 +25,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 
 import th.ac.mfu.repoai.domain.User;
 import th.ac.mfu.repoai.domain.Repository;
+import th.ac.mfu.repoai.domain.repositorydto.ContextChunk;
 import th.ac.mfu.repoai.domain.repositorydto.RepositoryDto;
+import th.ac.mfu.repoai.repository.ContextChunkRepository;
 import th.ac.mfu.repoai.repository.RepositoryRepository;
 import th.ac.mfu.repoai.repository.UserRepository;
 import th.ac.mfu.repoai.services.GitServices;
+import th.ac.mfu.repoai.services.RepositoryIndexingService;
 
 @RestController
 @RequestMapping("/api/repos")
@@ -33,13 +39,18 @@ public class RepositoryController {
     private final UserRepository userRepository;
     private final RepositoryRepository repositoryRepository;
     private final GitServices gitServices;
+     private final RepositoryIndexingService indexingService;
+     private final ContextChunkRepository contextChunkRepository;
 
     public RepositoryController(UserRepository userRepository,
             RepositoryRepository repositoryRepository,
-            GitServices gitServices) {
+            GitServices gitServices, RepositoryIndexingService indexingService,
+            ContextChunkRepository contextChunkRepository) {
         this.userRepository = userRepository;
         this.repositoryRepository = repositoryRepository;
         this.gitServices = gitServices;
+         this.indexingService = indexingService; 
+         this.contextChunkRepository = contextChunkRepository;
     }
 
     // List repositories saved for a user (by user's GitHub ID)
@@ -106,4 +117,65 @@ public class RepositoryController {
         }
         return gitServices.deleteRepositoryAndRemove(owner, repo);
     }
+ 
+    @PostMapping("/connect")
+@Operation(summary = "Connect repository and trigger indexing")
+public ResponseEntity<Map<String, Object>> connectRepository(
+        @RequestBody Map<String, Object> payload) {
+    
+    try {
+        Long githubId = ((Number) payload.get("githubId")).longValue();
+        Long repoId = ((Number) payload.get("repoId")).longValue();
+        
+        User user = userRepository.findByGithubId(githubId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        // Start indexing process
+        Repository connectedRepo = indexingService.connectAndIndexRepository(
+            user, repoId
+        );
+        
+        // Fetch the stored chunks to show in response
+        List<ContextChunk> chunks = contextChunkRepository.findByRepoId(repoId);
+        
+        // Convert chunks to readable format - FIXED
+        List<Map<String, Object>> chunkDetails = chunks.stream()
+            .map(chunk -> {
+                Map<String, Object> chunkMap = new HashMap<>();
+                chunkMap.put("chunk_id", chunk.getChunkId());
+                chunkMap.put("path", chunk.getPath());
+                chunkMap.put("start_line", chunk.getStartLine());
+                chunkMap.put("end_line", chunk.getEndLine());
+                chunkMap.put("symbol_fqn", chunk.getSymbolFqn() != null ? chunk.getSymbolFqn() : "");
+                chunkMap.put("symbol_kind", chunk.getSymbolKind().toString());
+                chunkMap.put("content_hash", chunk.getContentHash());
+                chunkMap.put("qdrant_vector_id", chunk.getQdrantVectorId() != null ? chunk.getQdrantVectorId() : "NOT_SET");
+                chunkMap.put("embedding_model", chunk.getEmbeddingModel() != null ? chunk.getEmbeddingModel() : "NOT_SET");
+                chunkMap.put("embedding_dim", chunk.getEmbeddingDim() != null ? chunk.getEmbeddingDim() : 0);
+                return chunkMap;
+            })
+            .collect(Collectors.toList());
+        
+        // Return response - FIXED
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "success");
+        response.put("message", "Repository connected and indexed successfully");
+        response.put("repo_id", connectedRepo.getRepoId());
+        response.put("repo_name", connectedRepo.getFullName());
+        response.put("chunks_created", chunks.size());
+        response.put("chunks", chunkDetails);
+        
+        return ResponseEntity.ok(response);
+        
+    } catch (Exception e) {
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("status", "error");
+        errorResponse.put("message", e.getMessage());
+        
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(errorResponse);
+    }
+}
+
+
 }
