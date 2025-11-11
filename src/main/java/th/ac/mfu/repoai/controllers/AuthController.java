@@ -1,9 +1,13 @@
 package th.ac.mfu.repoai.controllers;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
@@ -12,6 +16,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+
+import java.time.Duration;
+import org.springframework.http.ResponseCookie;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +36,9 @@ public class AuthController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
 
     @GetMapping("/token")
     @ResponseBody
@@ -89,6 +99,26 @@ public class AuthController {
         return new ResponseEntity<>(user, HttpStatus.OK);
     }
 
+    // Start OAuth and remember where to send the user back on success
+    @GetMapping("/start")
+    public ResponseEntity<Void> start(@org.springframework.web.bind.annotation.RequestParam(required = false) String redirect) {
+        String target = (redirect == null || redirect.isBlank()) ? frontendUrl : redirect;
+
+        ResponseCookie cookie = ResponseCookie.from("app_redirect",
+                        URLEncoder.encode(target, StandardCharsets.UTF_8))
+                .httpOnly(true)
+                .secure(false) // set true if serving over HTTPS
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(Duration.ofMinutes(5))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .header("Location", "/oauth2/authorization/github")
+                .build();
+    }
+
     // Explicit endpoint to initiate OAuth2 login from frontends
     @GetMapping("/authorize")
     public ResponseEntity<Void> authorize() {
@@ -109,6 +139,6 @@ public class AuthController {
     @PostMapping("/logout")
     public String logout(HttpServletRequest request, HttpServletResponse response) throws ServletException {
         request.logout(); // invalidates session and clears OAuth
-        return "redirect:/";
+        return "redirect:" + frontendUrl;
     }
 }
