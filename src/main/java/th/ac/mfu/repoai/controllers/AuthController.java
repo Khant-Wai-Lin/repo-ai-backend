@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 
 import java.time.Duration;
 import org.springframework.http.ResponseCookie;
@@ -137,8 +138,29 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public String logout(HttpServletRequest request, HttpServletResponse response) throws ServletException {
-        request.logout(); // invalidates session and clears OAuth
-        return "redirect:" + frontendUrl;
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws ServletException {
+        // Invalidate Spring Security session and clear authentication
+        new SecurityContextLogoutHandler().logout(request, response, authentication);
+
+        // Proactively expire cookies that may exist in browser
+        ResponseCookie clearSession = ResponseCookie.from("JSESSIONID", "")
+                .httpOnly(true)
+                .secure(false) // set true in HTTPS
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(0)
+                .build();
+
+        ResponseCookie clearRedirect = ResponseCookie.from("app_redirect", "")
+                .httpOnly(true)
+                .secure(false)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(0)
+                .build();
+
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, clearSession.toString(), clearRedirect.toString())
+                .build();
     }
 }
