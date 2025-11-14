@@ -9,7 +9,6 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # One-time per project, but safe to run idempotently: enable required APIs
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
     args:
@@ -45,8 +44,8 @@ steps:
           --platform=managed \
           --allow-unauthenticated \
           --add-cloudsql-instances=$_CLOUDSQL \
-          --set-env-vars=APP_FRONTEND_URL=https://your-frontend-url,DB_URL="jdbc:mysql:///$$_DB_NAME?socketFactory=com.google.cloud.sql.mysql.SocketFactory&cloudSqlInstance=$$_CLOUDSQL&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",DB_USERNAME=repoai,DB_PASSWORD=Root123!,GITHUB_CLIENT_ID=Ov23liCT5p7llpIsuSF5,GITHUB_CLIENT_SECRET=2bd44ecd4c133e7d17cf371184f92e636a8afcad,PORT=8081,SERVER_PORT=8081
-        echo "WARNING: Using plain env vars for sensitive values. Switch back to --set-secrets in production."
+          --set-env-vars="APP_FRONTEND_URL=https://your-frontend-url,DB_URL=jdbc:mysql:///$_DB_NAME?socketFactory=com.google.cloud.sql.mysql.SocketFactory&cloudSqlInstance=$_CLOUDSQL&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC,DB_USERNAME=repoai" \
+          --set-secrets="DB_PASSWORD=DB_PASSWORD:latest,GITHUB_CLIENT_ID=GITHUB_CLIENT_ID:latest,GITHUB_CLIENT_SECRET=GITHUB_CLIENT_SECRET:latest"
 
 images:
   - $_REGION-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$SHORT_SHA
