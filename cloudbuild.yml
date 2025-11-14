@@ -9,6 +9,19 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
+  # One-time per project, but safe to run idempotently: enable required APIs
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        gcloud --quiet services enable \
+          run.googleapis.com \
+          artifactregistry.googleapis.com \
+          cloudbuild.googleapis.com \
+          secretmanager.googleapis.com \
+          sqladmin.googleapis.com
+
   - name: gcr.io/cloud-builders/docker
     args:
       - build
@@ -24,6 +37,7 @@ steps:
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
+      - --quiet
       - run
       - deploy
       - $_SERVICE
